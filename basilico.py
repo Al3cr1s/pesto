@@ -628,11 +628,25 @@ class CommandRunner(threading.Thread):
         else:
             success = self.dd(iso, dev)
             if success:
-                success = run_command_on_partition(dev, f"sudo growpart {dev} 1")  # FIXME: se ha più partizioni non funziona
+                partition = ""
+                print(f"dev: {dev}")  # Added print statement for testing
+                result = subprocess.run(["lsblk --exclude 7 -J -o PTTYPE,NAME"], capture_output=True, text=True)
+                if result.returncode == 0:
+                    lsblk_output = json.loads(result.stdout)
+                    for device in lsblk_output.get("blockdevices", []):
+                        if device.get("name") == dev:
+                            if "children" in device:
+                                for part in device["children"]:
+                                    if part.get("pttype") == "gpt":
+                                        partition = part["name"]
+                                        print(f"Found GPT partition: {partition}")  # Added print statement for testing
+                                        break
+                            break
+                success = run_command_on_partition(dev, f"sudo growpart {dev} {partition}") #FIXME: se ha più partizioni non funziona
                 if success:
-                    success = run_command_on_partition(dev, f"sudo e2fsck -fy {dev}1")
+                    success = run_command_on_partition(dev, f"sudo e2fsck -fy {dev}{partition}")
                     if success:
-                        success = run_command_on_partition(dev, f"sudo resize2fs {dev}1")
+                        success = run_command_on_partition(dev, f"sudo resize2fs {dev}{partition}")
                         if success:
                             pass
                         else:
